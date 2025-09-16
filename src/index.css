@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+/* theme tokens */
+:root {
+  --bg: #0b0f14;
+  --fg: #e8eef7;
+  --muted: #a8b3c7;
+  --card: rgba(255,255,255,0.06);
+  --border: rgba(255,255,255,0.14);
+  --accent: #8ab4ff;
+  --accent-ink: #0b0f14;
+  --ok: #46d38d;
+  --warn: #ffb86b;
+  --bad: #ff6b6b;
+}
+:root[data-theme="light"] {
+  --bg: #f7f9fc;
+  --fg: #0b0f14;
+  --muted: #445065;
+  --card: #ffffff;
+  --border: rgba(0,0,0,0.12);
+  --accent: #2563eb;
+  --accent-ink: #ffffff;
+  --ok: #16a34a;
+  --warn: #f59e0b;
+  --bad: #ef4444;
+}
+
+html, body, #root { height: 100%; }
+body { background: var(--bg); color: var(--fg); }
+
+/* small helpers so the UI components look good */
+.card { border: 1px solid var(--border); border-radius: 16px; padding: 16px; background: var(--card); }
+.btn { display: inline-flex; align-items: center; gap: 8px; border-radius: 12px; padding: 8px 12px; font-weight: 600; font-size: 14px; }
+.btn-primary { background: var(--accent); color: var(--accent-ink); }
+.btn-ghost { background: color-mix(in oklab, var(--fg), transparent 94%); border: 1px solid var(--border); color: var(--fg); }
+.btn-danger { background: color-mix(in oklab, var(--bad), transparent 85%); border: 1px solid color-mix(in oklab, var(--bad), transparent 60%); color: var(--fg); }
+.input { border: 1px solid var(--border); background: transparent; border-radius: 12px; padding: 8px 12px; }
+.badge { display: inline-flex; align-items: center; border-radius: 10px; padding: 4px 8px; font-weight: 700; font-size: 12px; }
+.badge-soft { background: color-mix(in oklab, var(--fg), transparent 92%); border: 1px solid var(--border); color: var(--fg); }
+.badge-ok { background: color-mix(in oklab, var(--ok), transparent 70%); color: var(--fg); }
+.badge-warn { background: color-mix(in oklab, var(--warn), transparent 70%); color: var(--fg); }
+.badge-bad { background: color-mix(in oklab, var(--bad), transparent 70%); color: var(--fg); }
