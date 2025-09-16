@@ -1,4 +1,10 @@
-// lib/ai.js
+// src/lib/ai.js
+// -----------------------------------------
+// OpenFDA fetch + local cache (unchanged API)
+// Chat answers via /api/chat (Gemini proxy)
+// with retrieval fallback if the proxy fails
+// -----------------------------------------
+
 import { store } from './db'
 
 const AI_CACHE_KEY = 'aiMedInfoCache'
@@ -13,7 +19,7 @@ export async function getMedExplanation(name, opts = {}) {
   const cache = (await store.get(AI_CACHE_KEY)) || {}
   if (!opts.refresh && cache[name]) return cache[name]
 
-  let result = await fetchOpenFDA(name)
+  const result = await fetchOpenFDA(name)
 
   cache[name] = result
   await store.set(AI_CACHE_KEY, cache)
@@ -123,48 +129,64 @@ function arrToShort(v, maxLen = 600) {
   const text = Array.isArray(v) ? v.join(' ') : String(v)
   return text.replace(/\s+/g, ' ').slice(0, maxLen).trim()
 }
-// Add to src/lib/ai.js
-export async function askMedQuestion({ question, context }) {
-  const key = import.meta.env.VITE_OPENAI_API_KEY
-  if (key) {
-    try {
-      return await askWithOpenAI({ question, context, apiKey: key })
-    } catch (e) {
-      console.debug('[MedInfo] OpenAI failed, falling back', e?.message || e)
-      return retrievalFallback({ question, context })
-    }
+
+/* ---------------- Chat answering ----------------
+   askMedQuestion → tries Gemini via /api/chat
+   and falls back to local retrieval if it fails
+-------------------------------------------------- */
+
+export async function askMedQuestion({ question, context, history = [] }) {
+  const q = String(question || '').trim()
+  if (!q) return 'Please enter a question. This is not medical advice.'
+
+  try {
+    const reply = await askViaProxy({ message: q, context: String(context || ''), history })
+    return reply.endsWith('Not medical advice.') ? reply : `${reply}\n\nNot medical advice.`
+  } catch (e) {
+    console.debug('[MedInfo] /api/chat failed, falling back:', e?.message || e)
+    return retrievalFallback({ question: q, context: String(context || '') })
   }
-  return retrievalFallback({ question, context })
 }
 
-async function askWithOpenAI({ question, context, apiKey }) {
-  const messages = [
-    { role: 'system', content:
-      'You are a careful medical explainer for a personal medication app. Use ONLY the provided context. If missing, say you do not have that information. Keep answers under 120 words. End with: "This is not medical advice."' },
-    { role: 'user', content: `CONTEXT:\n${context}\n\nQUESTION:\n${question}` },
-  ]
-
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+async function askViaProxy({ message, context, history }) {
+  const resp = await fetch('/api/chat', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model: 'gpt-4o-mini', temperature: 0.2, messages }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, context, history })
   })
-  if (!res.ok) throw new Error(`AI ${res.status}`)
-  const data = await res.json()
-  return data.choices?.[0]?.message?.content?.trim() || 'I could not generate a response. This is not medical advice.'
+  if (!resp.ok) {
+    let detail = ''
+    try { detail = await resp.text() } catch {}
+    throw new Error(`HTTP ${resp.status} ${resp.statusText} ${detail.slice(0, 200)}`)
+  }
+  const data = await resp.json()
+  return (data?.reply || '').trim()
 }
+
+
+/* ---------------- Retrieval fallback ---------------- */
 
 function retrievalFallback({ question, context }) {
-  // tiny keyword search over context → concise slice
-  const q = question.toLowerCase()
-  const lines = context.split('\n').filter(Boolean)
+  const q = String(question).toLowerCase()
+  const lines = String(context || '').split('\n').filter(Boolean)
+
   const hits = lines
-    .map((t,i)=>({i,t,score:scoreLine(t.toLowerCase(),q)}))
-    .filter(x=>x.score>0)
-    .sort((a,b)=>b.score-a.score)
-    .slice(0,4)
-  const answer = hits.map(h=>lines[h.i]).join(' ')
-  if (!answer) return 'I do not have that information in the current medicine context. This is not medical advice.'
+    .map((t, i) => ({ i, t, score: scoreLine(t.toLowerCase(), q) }))
+    .filter(x => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4)
+
+  const answer = hits.map(h => lines[h.i]).join(' ')
+  if (!answer) {
+    return 'I do not have that information in the current medicine context. This is not medical advice.'
+  }
   return `${answer}\n\nThis is not medical advice.`
 }
-function scoreLine(text,q){ let s=0; for(const term of q.split(/\W+/).filter(Boolean)){ if(text.includes(term)) s++ } return s }
+
+function scoreLine(text, q) {
+  let s = 0
+  for (const term of q.split(/\W+/).filter(Boolean)) {
+    if (text.includes(term)) s++
+  }
+  return s
+}

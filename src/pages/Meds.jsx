@@ -118,12 +118,6 @@ export default function Meds() {
                   >
                     Delete
                   </button>
-                  <button
-                    className="px-2 py-1 rounded-lg bg-white/10 border border-white/20 text-sm hover:bg-white/15"
-                    onClick={() => { setChatMed(m.name); setChatOpen(true) }}
-                  >
-                    Ask
-                  </button>
                 </div>
               </div>
 
