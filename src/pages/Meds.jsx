@@ -24,10 +24,17 @@ export default function Meds() {
   async function saveSchedules(next) { setSchedules(next); await store.set(KEYS.schedules, next) }
 
   async function addMed() {
-    const m = { ...draft, id: newId() }
-    await saveMeds([...meds, m])
-    setDraft(Medication())
-  }
+  const m = { ...draft, id: newId() }
+  await saveMeds([...meds, m])
+  setDraft(Medication())
+
+  // Auto-ingest FDA label into RAG pipeline
+  fetch('http://localhost:8000/api/ingest', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ med_name: draft.name.toLowerCase() }),
+  }).catch(err => console.warn('RAG ingest skipped:', err))
+}
 
   async function addSchedule(medId) {
     const s = Schedule({ medId, times: [time] })
