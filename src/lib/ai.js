@@ -136,16 +136,20 @@ function arrToShort(v, maxLen = 600) {
 -------------------------------------------------- */
 
 export async function askMedQuestion({ question, context, history = [] }) {
-  const q = String(question || '').trim()
-  if (!q) return 'Please enter a question. This is not medical advice.'
+  const medNames = (context?.meds || []).map(m => m.name)
 
-  try {
-    const reply = await askViaProxy({ message: q, context: String(context || ''), history })
-    return reply.endsWith('Not medical advice.') ? reply : `${reply}\n\nNot medical advice.`
-  } catch (e) {
-    console.debug('[MedInfo] /api/chat failed, falling back:', e?.message || e)
-    return retrievalFallback({ question: q, context: String(context || '') })
-  }
+  const res = await fetch('http://localhost:8000/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      question,
+      med_names: medNames,
+    }),
+  })
+
+  if (!res.ok) throw new Error('MedCompanion API error')
+  const data = await res.json()
+  return data.answer
 }
 
 async function askViaProxy({ message, context, history }) {
